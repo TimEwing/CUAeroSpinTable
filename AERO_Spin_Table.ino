@@ -6,6 +6,20 @@
 #define PIN_MS3 4
 #define PIN_EN  7
 
+// NOTE: Spin table has 800 steps/rev
+
+float start_time = 0;
+float stop_time = 0;
+
+int step_count = 0;
+
+int mode = ' ';
+int step_delay = 25;
+bool dir = false;
+bool MS1 = false;
+bool MS2 = false;
+bool MS3 = false;
+
 void setup() 
 {
   // Setup Serial for debug
@@ -20,46 +34,121 @@ void setup()
   pinMode(PIN_EN, OUTPUT);
   // Set stepper driver pins to default
   reset_big_easy_pins();
-  // Enable
-  digitalWrite(PIN_EN, LOW);
 }
 
-int k1 = 25;
-int k2 = 100;
-
-bool cont = true;
 void loop() 
 {
-  if (!cont)
-  {
-    return;
-  }
-  if (Serial.available() > 0)
-  {
-    cont = false;
-    Serial.println("done");
-    return;
-  }
+  parse_serial();
   
-  // Bounce back and forth
-  Serial.println("Forward");
-  digitalWrite(PIN_DIR, LOW);
-  for(int x=0; x<k2; x++) 
+  if(step_count > 0)
   {
     digitalWrite(PIN_STP, HIGH);
-    delay(k1);
+    delay(step_delay);
     digitalWrite(PIN_STP, LOW);
-    delay(k1);
+    delay(step_delay);
+    step_count--;
   }
-
-  Serial.println("Backward");
-  digitalWrite(PIN_DIR, HIGH);
-  for(int x=0; x<k2; x++)
+  else if(stop_time == 0)
   {
-    digitalWrite(PIN_STP, HIGH);
-    delay(k1);
-    digitalWrite(PIN_STP, LOW);
-    delay(k1);
+    stop_time = millis();
+  }
+  else
+  {
+    Serial.println((stop_time - start_time) / 1000);
+  }
+}
+
+void parse_serial()
+{
+  bool get_input = true;
+  char m = 0;
+  while(Serial.available() > 0)
+  {
+    char in = ' ';
+    in = Serial.read();
+
+    switch (in)
+    {
+      case 'g': // go
+        digitalWrite(PIN_EN, LOW);
+        get_input = false;
+        step_count = 800;
+        start_time = millis();
+        stop_time = 0;
+        mode = ' ';
+        continue; // This will make the while loop continue, not the switch statement
+      case 's': // stop
+        digitalWrite(PIN_EN, HIGH);
+        get_input = false;
+        mode = ' ';
+        continue;
+      case 'm': // set MS*
+        mode = 'm';
+        m = 0;
+        continue;
+      case 't':// set step
+        mode = 't';
+        continue;
+      case 'd':// set dir
+        mode = 'd';
+        continue;
+    }
+
+    switch (mode)
+    {
+      case 'm':
+        if (m == 0) // check if we picked which pin to set
+        {
+          switch(in)
+          {
+            case '1':
+              m = 1;
+              break;
+            case '2':
+              m = 2;
+              break;
+            case '3':
+              m = 3;
+              break;
+          }
+        }
+        else
+        {
+          switch(m)
+          {
+            case 1:
+              digitalWrite(PIN_MS1, in == '0' ? LOW : HIGH);
+              m = 0;
+              mode = ' ';
+              Serial.println(in == '0' ? "Set MS1 to LOW" : "Set MS1 to HIGH");
+              break;
+            case 2:
+              digitalWrite(PIN_MS1, in == '0' ? LOW : HIGH);
+              m = 0;
+              mode = ' ';
+              Serial.println(in == '0' ? "Set MS2 to LOW" : "Set MS2 to HIGH");
+              break;
+            case 3:
+              digitalWrite(PIN_MS1, in == '0' ? LOW : HIGH);
+              m = 0;
+              mode = ' ';
+              Serial.println(in == '0' ? "Set MS3 to LOW" : "Set MS3 to HIGH");
+              break;
+          }
+        }
+        break;
+      case 't':
+        step_delay = Serial.parseInt();
+        Serial.println(step_delay);
+        mode = ' ';
+        break;
+      case 'd':
+        digitalWrite(PIN_DIR, dir ? LOW : HIGH);
+        Serial.println(dir ? "LOW" : "HIGH");
+        dir = !dir;
+        mode = ' ';
+        break;
+    }
   }
 }
 
